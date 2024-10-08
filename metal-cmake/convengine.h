@@ -16,22 +16,27 @@ public:
     void render(float* input);
     float* result = nullptr;
 private:
-    MTL::Buffer* _impulseResponse = nullptr ;
-    MTL::Buffer* _sizes = nullptr ;
-    MTL::Buffer* _dryBuffer = nullptr ;
-    MTL::Buffer* _timeDomainBuffer = nullptr;
-    MTL::Buffer* _resultBuffer = nullptr;
-    MTL::Device* _pDevice = nullptr;
-    MTL::CommandBuffer* _CommandBuffer = nullptr;
-    MTL::CommandQueue* _mCommandQueue = nullptr;
-    // Get the main bundle
-    NS::Bundle* _bundle = NS::Bundle::mainBundle();
-   
-    MTL::Library* _library = nullptr;
-    MTL::Function* _convolution = nullptr;
-    MTL::Function* _shift_and_insert = nullptr;
-    MTL::ComputePipelineState* _pipeLine = nullptr;
+    MTL::Buffer* _impulseResponse ;
+    MTL::Buffer* _sizes ;
+    MTL::Buffer* _dryBuffer ;
+    MTL::Buffer* _timeDomainBuffer;
+    MTL::Buffer* _resultBuffer;
+    MTL::Device* _pDevice;
+    MTL::CommandBuffer* _CommandBuffer;
+    MTL::CommandQueue* _mCommandQueue;
     
+   
+    MTL::Library* _library;
+    MTL::Function* _convolution;
+    MTL::Function* _shift_and_insert;
+    MTL::ComputePipelineState* _pipeLine;
+    
+    //
+    MTL::ComputeCommandEncoder* encoder1;
+    MTL::ComputeCommandEncoder* encoder2;
+    //
+    MTL::ComputePipelineState* _convolutionPipeline;
+    MTL::ComputePipelineState* _shiftAndInsertPipeline;
     
     int bs = 0;
     int sizeBs = 0;
@@ -42,6 +47,10 @@ private:
     int partitions = 0;
     float* convResBuffer = nullptr;
     float* overLapBuffer = nullptr;
+    
+    //
+    MTL::Size gridSize;
+    MTL::Size threadGroupSize;
 };
 
 

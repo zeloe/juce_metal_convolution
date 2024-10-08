@@ -73,7 +73,7 @@ target_link_libraries(METAL PUBLIC
     "-framework QuartzCore"
 )
 # Set the path for the Metal library
-set(METAL_LIBRARY_PATH "${CMAKE_CURRENT_BINARY_DIR}/metal-cmake/default.metallib")
+set(METAL_LIBRARY_PATH "${CMAKE_CURRENT_BINARY_DIR}/default.metallib")
 # Add a compile definition for the Metal library path
 target_compile_definitions(METAL PUBLIC METAL_LIBRARY_PATH="${METAL_LIBRARY_PATH}")
 

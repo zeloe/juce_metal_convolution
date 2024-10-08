@@ -23,13 +23,13 @@ int main()
     // Create the AudioDeviceManager instance
     juce::AudioDeviceManager audioDeviceManager;
     std::unique_ptr<MyAudioCallback> audiocallback ;
-    
-    
     int temp = impfile->lengthInSamples;
+    int temp2 = dry->lengthInSamples;
+  
     std::cout<<temp<< " =  Length in samples of impulse response" << std::endl;
     
     
-    int temp2 = dry->lengthInSamples;
+    
     
     
     
