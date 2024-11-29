@@ -3,7 +3,7 @@
 #define _AUDIOCALLBACK_H_
 #include "../../metal-cmake/convengine.h"
 #include <JuceHeader.h>
-    class MyAudioCallback : public juce::AudioIODeviceCallback 
+class MyAudioCallback : public juce::AudioIODeviceCallback , public juce::Thread
     {
     public:
         MyAudioCallback(float* impulseResponseBufferData, int maxBufferSize, int impulseResponseSize, float* dryPtr, int drySize);
@@ -18,8 +18,9 @@
          
         void prepare(juce::AudioBuffer<float>& dry, juce::AudioBuffer<float>& imp, int bufferSize);
         bool hasFinished = false;
-
-
+        
+        void run() override;
+        
         virtual void 	audioDeviceAboutToStart(AudioIODevice* device) override;
            
         virtual void 	audioDeviceStopped() override;
@@ -32,7 +33,9 @@
 
 
     private:
+        juce::AudioBuffer<float> resBuffer;
         ConvEngine* metal_engine = nullptr;
+        std::atomic<bool> processingInBackground;
         int bs = -1;
         int drySize = -1;
         int counter = 0;

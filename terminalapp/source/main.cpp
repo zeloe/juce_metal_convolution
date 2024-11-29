@@ -8,7 +8,7 @@ int main()
 {
   //auto audioClass = std::make_unique<HandlerClass>();
     juce::ScopedJuceInitialiser_GUI juceInitialiser;
-    const int bs = 256;
+    const int bs = 1024;
     auto* IRStream = new juce::MemoryInputStream(BinaryData::imp_wav, BinaryData::imp_wavSize,false);
     auto* DRYStream= new juce::MemoryInputStream(BinaryData::dry_wav, BinaryData::dry_wavSize, false);
     

@@ -13,7 +13,7 @@ public:
     ConvEngine(float* impulseResponse, int maxBufferSize, int impulseResponseSize);
     ~ConvEngine();
     
-    void render(float* input);
+    void render(float* input, float* output);
     float* result = nullptr;
 private:
     MTL::Buffer* _impulseResponse ;

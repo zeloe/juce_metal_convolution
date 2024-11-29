@@ -16,11 +16,11 @@ ConvEngine::ConvEngine(float* impulseResponse, int maxBufferSize, int impulseRes
     
     // Get sizes for copying
     sizeBs = bs * sizeof(float);
-    convResSize = bs * 2 - 1;
+    convResSize = bs * 2;
     sizeConvResSize = convResSize * sizeof(float);
     
     // Get number of partitions
-    partitions = (impulseResponseSize + bs - 1) / bs; // Ensure correct rounding up
+    partitions = (impulseResponseSize / bs) + 1; // Ensure correct rounding up
 
     // Get padded size
     paddedSize = partitions * bs;
@@ -50,7 +50,7 @@ ConvEngine::ConvEngine(float* impulseResponse, int maxBufferSize, int impulseRes
     overLapBuffer = (float*)calloc(bs, sizeof(float));
 
     // Get the sizes
-    uint sizes[3] = { static_cast<uint>(bs), static_cast<uint>(partitions), static_cast<uint>(paddedSize) };
+    uint sizes[3] = { static_cast<uint>(bs), static_cast<uint>(convResSize), static_cast<uint>(0) };
     
     // Allocate memory for _sizesbuffer
     _sizes = _pDevice->newBuffer(sizeof(sizes), MTL::ResourceStorageModeShared);
@@ -65,12 +65,13 @@ ConvEngine::ConvEngine(float* impulseResponse, int maxBufferSize, int impulseRes
     _library = _pDevice->newLibrary(filePath, &pError);
 
     if (!_library) {
-        std::cerr << "Failed to load default Metal library: " << pError->localizedDescription()->utf8String() << std::endl;
-        throw std::runtime_error("Default library loading failed.");
+        std::cerr << "Failed to load Metal library: "
+        << pError->localizedDescription()->utf8String() << std::endl;
+        throw std::runtime_error("Library loading failed.");
     }
 
     // Create compute functions
-    _convolution = _library->newFunction(NS::String::string("shared_partitioned_convolution4", NS::UTF8StringEncoding));
+    _convolution = _library->newFunction(NS::String::string("shared_partitioned_convolution", NS::UTF8StringEncoding));
     _shift_and_insert = _library->newFunction(NS::String::string("shiftAndInsertKernel", NS::UTF8StringEncoding));
 
     // Create the pipeline state for the shift and insert function
@@ -90,11 +91,12 @@ ConvEngine::ConvEngine(float* impulseResponse, int maxBufferSize, int impulseRes
         std::cerr << "Failed to create convolution pipeline state: " << convolutionError->localizedDescription()->utf8String() << std::endl;
         throw std::runtime_error("Convolution pipeline creation failed.");
     }
-    // Define thread group size (number of threads per threadgroup)
+    // Define thread group size
      threadGroupSize = MTL::Size::Make(bs, 1, 1);
 
-    // Define grid size (total number of threads = numBerOFSubPartitions * bs)
+    // Define grid size
      gridSize = MTL::Size::Make(partitions, 1, 1);
+    
 }
 
 
@@ -123,29 +125,31 @@ ConvEngine::~ConvEngine()
     _convolutionPipeline->release();
     _shiftAndInsertPipeline->release();
 }
-void ConvEngine::render(float* input)
+void ConvEngine::render(float* input, float* output)
 {
     // Copy input data to the dry buffer
     memcpy(_dryBuffer->contents(), input, sizeBs);
     
+    MTL::Size numThreadgroups = MTL::Size::Make(partitions,1,1);
     // Create Command Buffer
     _CommandBuffer = _mCommandQueue->commandBuffer();
-
     // First compute operation: Shift and Insert
     {
         // Create and configure the first encoder
         auto encoder = _CommandBuffer->computeCommandEncoder();
         encoder->setComputePipelineState(_shiftAndInsertPipeline);
-        encoder->setBuffer(_timeDomainBuffer, 0, 0);  // Input buffer
-        encoder->setBuffer(_dryBuffer, 0, 1);          // Output buffer
+        encoder->setBuffer(_timeDomainBuffer, 0, 0);  // _timeDomainBuffer buffer
+        encoder->setBuffer(_dryBuffer, 0, 1);          // _dryBuffer buffer
         encoder->setBuffer(_sizes, 0, 2);              // Size buffer
 
         // Dispatch the compute command
-        encoder->dispatchThreads(gridSize, threadGroupSize);
+        encoder->dispatchThreads(numThreadgroups, threadGroupSize);
         
         // End encoding for this encoder
         encoder->endEncoding();
     }
+   
+    
 
     // Second compute operation: Convolution
     {
@@ -156,30 +160,41 @@ void ConvEngine::render(float* input)
         encoder2->setBuffer(_impulseResponse, 0, 2);      // Impulse Response buffer
         encoder2->setBuffer(_sizes, 0, 3);                 // Sizes buffer
         
-        uint totalSharedMemorySize = bs * 2 * sizeof(float);  // For arr1 and arr2
+        uint totalSharedMemorySize = bs * 4 * sizeof(float);  // For arr1 and arr2
         encoder2->setThreadgroupMemoryLength(totalSharedMemorySize, 0);
         
-        // Dispatch the compute command
-        encoder2->dispatchThreads(gridSize, threadGroupSize);
+        
+        encoder2->dispatchThreads(numThreadgroups, threadGroupSize);
 
         // End encoding for this encoder
         encoder2->endEncoding();
     }
 
-    // Commit the command buffer and wait for completion
+    
+    
+    
     _CommandBuffer->commit();
     _CommandBuffer->waitUntilCompleted();
     
-    // Copy results back to convResBuffer
+    // Copy results to CPU memory buffer
     memcpy(convResBuffer, _resultBuffer->contents(), sizeConvResSize);
+
+    // Create a new command buffer to clear the result buffer
+    auto blitCommandBuffer = _mCommandQueue->commandBuffer();
+    auto blitEncoder = blitCommandBuffer->blitCommandEncoder();
+    blitEncoder->fillBuffer(_resultBuffer, NS::Range::Make(0, sizeConvResSize), 0);
+    blitEncoder->endEncoding();
+    blitCommandBuffer->commit();
+    blitCommandBuffer->waitUntilCompleted();
+   
     
     // Process results
     for (int i = 0; i < bs; i++) {
-        result[i] = (convResBuffer[i] + overLapBuffer[i]) * 0.015f;
+        output[i] = (convResBuffer[i] + overLapBuffer[i]);
         overLapBuffer[i] = convResBuffer[bs + i - 1];
     }
+    // Clear result buffer
     
-    // Reset the _resultBuffer contents to zero
-    void* bufferContents = _resultBuffer->contents(); // Get the pointer to the buffer contents
-    memset(bufferContents, 0, sizeConvResSize); // Use memset to fill the buffer with zeros
+        
+    
 }
