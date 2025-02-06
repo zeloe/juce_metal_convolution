@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
 # IDEs: Enable grouping of source files into folders in IDEs.
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-set(LIB_JUCE_TAG "8.0.2")
+set(LIB_JUCE_TAG "8.0.6")
 
 include(FetchContent)
 

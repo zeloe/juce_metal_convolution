@@ -3,7 +3,8 @@
 #include "JuceHeader.h"
 
 #include "audiocallback.h"
-
+#include <chrono>
+#include <ctime>
 int main()
 {
   //auto audioClass = std::make_unique<HandlerClass>();
@@ -23,11 +24,13 @@ int main()
     // Create the AudioDeviceManager instance
     juce::AudioDeviceManager audioDeviceManager;
     std::unique_ptr<MyAudioCallback> audiocallback ;
-    int temp = impfile->lengthInSamples;
-    int temp2 = dry->lengthInSamples;
-  
-    std::cout<<temp<< " =  Length in samples of impulse response" << std::endl;
+    size_t temp = impfile->lengthInSamples;
+    size_t temp2 = dry->lengthInSamples;
     
+    size_t bigger = temp2;
+    if (temp > temp2) {
+        bigger = temp;
+    }
     
     
     
@@ -36,9 +39,9 @@ int main()
     
     juce::AudioBuffer<float> bufferimp;
     juce::AudioBuffer<float> bufferdry;
-    bufferdry.setSize(channels, temp2);
+    bufferdry.setSize(channels, bigger);
     bufferdry.clear();
-    bufferimp.setSize(channels, temp);
+    bufferimp.setSize(channels, bigger);
     bufferimp.clear();
     
     
@@ -46,11 +49,12 @@ int main()
     
     dry->read(&bufferdry, 0, temp2, 0, true, true);
     
+    juce::AudioBuffer<float> out;
+    out.setSize(1, temp + temp2);
+    out.clear();
     
-  
     
-    
-    
+    /*
     // Initialize the AudioDeviceManager with no input/output channels (default setup)
     audioDeviceManager.initialise(0, 2, nullptr, true);
     
@@ -87,8 +91,39 @@ int main()
     
     // Verify the buffer size has been set
     currentDevice = audioDeviceManager.getCurrentAudioDevice();
-    auto engine = std::make_unique<ConvEngine>(bufferimp.getWritePointer(0),deviceSetup.bufferSize,bufferimp.getNumSamples());
+    */
+    int bufferSize = 512;
+    auto engine = std::make_unique<ConvEngine>(bufferimp.getWritePointer(0),bufferSize,bufferimp.getNumSamples());
     
+    juce::AudioBuffer<float> tempbuffer;
+    tempbuffer.setSize(1, bufferSize);
+    tempbuffer.clear();
+    juce::AudioBuffer<float> result;
+    result.setSize(1, bufferSize);
+    result.clear();
+    for(int i = 0; i < bigger - bufferSize; i += bufferSize) {
+        int tempSize = bufferSize;
+        int inc = i;
+        float* tempwrite =tempbuffer.getWritePointer(0);
+        const float* dry =bufferdry.getReadPointer(0);
+        int counter = 0;
+         
+        std::memcpy(tempwrite, dry + i, bufferSize * sizeof(float));
+
+        engine->render(tempwrite, result.getWritePointer(0));
+        tempSize = bufferSize;
+        inc = i;
+        const float* resPrt = result.getReadPointer(0);
+        float* outPtr = out.getWritePointer(0);
+        std::memcpy(outPtr + i, resPrt, bufferSize * sizeof(float));
+
+        
+        
+        
+    }
+    
+    
+    /*
     audiocallback = std::make_unique<MyAudioCallback>(engine.get(), deviceSetup.bufferSize,bufferdry.getWritePointer(0),bufferdry.getNumSamples());
     juce::Thread::sleep(1000); // Sleep for 1 second
     
@@ -107,5 +142,23 @@ int main()
     }
     audioDeviceManager.removeAudioCallback(audiocallback.get());
     audioDeviceManager.closeAudioDevice();
+     */
+    auto end = std::chrono::system_clock::now();
+    
+    
+    std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+    
+   
+    juce::File outfile(juce::String("/Users/zenoloesch/Documents/GitHub/juce_metal_convolution/renders/" + static_cast<juce::String>((std::ctime(&end_time))) + "conv.wav"));
+    WavAudioFormat format;
+    std::unique_ptr<AudioFormatWriter> writer;
+    writer.reset (format.createWriterFor (new FileOutputStream (outfile),
+                                          48000.0,
+                                          out.getNumChannels(),
+                                          24,
+                                          {},
+                                          0));
+    writer->writeFromAudioSampleBuffer(out, 0, out.getNumSamples());
+    
     return 0;
 }

@@ -6,34 +6,33 @@
 
 const char* metalLibPath = METAL_LIBRARY_PATH; // Access the path defined in CMake
 
-ConvEngine::ConvEngine()
-{
+ConvEngine::ConvEngine(){
+    
     
 }
 ConvEngine::ConvEngine(float* impulseResponse, int maxBufferSize, int impulseResponseSize) {
+    
+    initDevice();
     // Get max buffer size
     bs = maxBufferSize;
     
-    // Get sizes for copying
+    // Size of BlockSize (bytes)
     sizeBs = bs * sizeof(float);
+    // Size of result (int)
     convResSize = bs * 2;
+    // Size of result (bytes)
     sizeConvResSize = convResSize * sizeof(float);
     
-    // Get number of partitions
-    partitions = (impulseResponseSize / bs) + 1; // Ensure correct rounding up
-
+    // Get number of partitions (round up)
+    partitions = (impulseResponseSize / bs) + 1;
     // Get padded size
     paddedSize = partitions * bs;
+    // Padded Size in bytes
     sizePaddedSize = paddedSize * sizeof(float);
 
-    // Get the device (GPU)
-    _pDevice = MTL::CreateSystemDefaultDevice();
+    allocateOnDevice();
+    _timeDomainBuffer2 = _pDevice->newBuffer(sizePaddedSize, MTL::ResourceStorageModeShared);
     
-    // Allocate memory on GPU
-    _impulseResponse = _pDevice->newBuffer(sizePaddedSize, MTL::ResourceStorageModeShared);
-    _timeDomainBuffer = _pDevice->newBuffer(sizePaddedSize, MTL::ResourceStorageModeShared);
-    _dryBuffer = _pDevice->newBuffer(sizeBs, MTL::ResourceStorageModeShared);
-    _resultBuffer = _pDevice->newBuffer(sizeConvResSize, MTL::ResourceStorageModeShared);
 
     // Initialize GPU buffers to zero (or use MTL::ResourceStorageModePrivate if not needed on the CPU)
     memset(_impulseResponse->contents(), 0, sizePaddedSize);
@@ -53,51 +52,90 @@ ConvEngine::ConvEngine(float* impulseResponse, int maxBufferSize, int impulseRes
     uint sizes[3] = { static_cast<uint>(bs), static_cast<uint>(convResSize), static_cast<uint>(0) };
     
     // Allocate memory for _sizesbuffer
-    _sizes = _pDevice->newBuffer(sizeof(sizes), MTL::ResourceStorageModeShared);
-    memcpy(_sizes->contents(), sizes, sizeof(sizes));
+    _sizes = _pDevice->newBuffer(sizeof(uint) * 3, MTL::ResourceStorageModeShared);
+    memcpy(_sizes->contents(), sizes, sizeof(uint) * 3);
 
     // Create a command queue
-    _mCommandQueue = _pDevice->newCommandQueue();
-
-    // Load the default library from the bundle
-    NS::Error* pError = nullptr; // To capture any errors
-    NS::String* filePath = NS::String::string(metalLibPath, NS::UTF8StringEncoding);
-    _library = _pDevice->newLibrary(filePath, &pError);
-
-    if (!_library) {
-        std::cerr << "Failed to load Metal library: "
-        << pError->localizedDescription()->utf8String() << std::endl;
-        throw std::runtime_error("Library loading failed.");
-    }
-
-    // Create compute functions
-    _convolution = _library->newFunction(NS::String::string("shared_partitioned_convolution", NS::UTF8StringEncoding));
-    _shift_and_insert = _library->newFunction(NS::String::string("shiftAndInsertKernel", NS::UTF8StringEncoding));
-
-    // Create the pipeline state for the shift and insert function
-    NS::Error* shiftandinsertError = nullptr;
-    _shiftAndInsertPipeline = _pDevice->newComputePipelineState(_shift_and_insert, &shiftandinsertError);
-
-    if (!_shiftAndInsertPipeline) {
-        std::cerr << "Failed to create shift and insert pipeline state: " << shiftandinsertError->localizedDescription()->utf8String() << std::endl;
-        throw std::runtime_error("Shift and insert pipeline creation failed.");
-    }
-
-    // Create the pipeline state for the convolution function
-    NS::Error* convolutionError = nullptr;
-    _convolutionPipeline = _pDevice->newComputePipelineState(_convolution, &convolutionError);
-
-    if (!_convolutionPipeline) {
-        std::cerr << "Failed to create convolution pipeline state: " << convolutionError->localizedDescription()->utf8String() << std::endl;
-        throw std::runtime_error("Convolution pipeline creation failed.");
-    }
-    // Define thread group size
-     threadGroupSize = MTL::Size::Make(bs, 1, 1);
-
-    // Define grid size
-     gridSize = MTL::Size::Make(partitions, 1, 1);
+    createCommandQueue();
     
+    // get Functions from .metallib
+    createDefaultLibrary();
+    
+    //create Compute Pipelines
+    createComputePipeLine();
+    
+  
+  
 }
+
+
+
+
+ConvEngine::ConvEngine(int maxBufferSize) {
+    
+    initDevice();
+    // Get max buffer size
+    bs = maxBufferSize;
+    
+    // Size of BlockSize (bytes)
+    sizeBs = bs * sizeof(float);
+    // Size of result (int)
+    convResSize = bs * 2;
+    // Size of result (bytes)
+    sizeConvResSize = convResSize * sizeof(float);
+    
+    paddedSize = ((48000 / bs) + 1) * bs;
+
+    // Padded Size in bytes
+    sizePaddedSize = paddedSize * sizeof(float);
+
+    // Allocate memory on GPU
+   
+    _dryBuffer = _pDevice->newBuffer(sizeBs, MTL::ResourceStorageModeShared);
+    _timeDomainBuffer = _pDevice->newBuffer(sizePaddedSize, MTL::ResourceStorageModeShared);
+    _timeDomainBuffer2 = _pDevice->newBuffer(sizePaddedSize, MTL::ResourceStorageModeShared);
+    
+    _impulseResponse = _pDevice->newBuffer(sizeBs, MTL::ResourceStorageModeShared);
+    _dryBuffer = _pDevice->newBuffer(sizeBs, MTL::ResourceStorageModeShared);
+    _resultBuffer = _pDevice->newBuffer(sizeConvResSize, MTL::ResourceStorageModeShared);
+    
+    
+    // Initialize other buffers
+    memset(_dryBuffer->contents(), 0, sizeBs);
+    memset(_timeDomainBuffer->contents(), 0, sizePaddedSize);
+    memset(_timeDomainBuffer2->contents(), 0, sizePaddedSize);
+    memset(_impulseResponse->contents(), 0, sizeBs);
+    memset(_timeDomainBuffer2->contents(), 0, sizePaddedSize);
+    memset(_resultBuffer->contents(), 0, sizeConvResSize);
+   
+
+  
+
+    // Allocate host memory
+    result = (float*)calloc(bs, sizeof(float));
+    convResBuffer = (float*)calloc(convResSize, sizeof(float));
+    overLapBuffer = (float*)calloc(bs, sizeof(float));
+
+    // Get the sizes
+    uint sizes[3] = { static_cast<uint>(bs), static_cast<uint>(convResSize), static_cast<uint>(0) };
+    
+    // Allocate memory for _sizesbuffer
+    _sizes = _pDevice->newBuffer(sizeof(uint) * 3, MTL::ResourceStorageModeShared);
+    memcpy(_sizes->contents(), sizes, sizeof(uint) * 3);
+
+    // Create a command queue
+    createCommandQueue();
+    
+    // get Functions from .metallib
+    createDefaultLibrary();
+    
+    //create Compute Pipelines
+    createComputePipeLine();
+    
+  
+  
+}
+
 
 
 ConvEngine::~ConvEngine()
@@ -117,22 +155,128 @@ ConvEngine::~ConvEngine()
     _convolution->release();
     _shift_and_insert->release();
     _library->release();
-    _pipeLine->release();
-
-    //
     
-    //
     _convolutionPipeline->release();
     _shiftAndInsertPipeline->release();
 }
 void ConvEngine::render(float* input, float* output)
 {
-    // Copy input data to the dry buffer
-    memcpy(_dryBuffer->contents(), input, sizeBs);
     
-    MTL::Size numThreadgroups = MTL::Size::Make(partitions,1,1);
-    // Create Command Buffer
+   // int bsOffset = offset * sizeBs;
+    
+    // Copy input data to the dry buffer
+    memcpy(static_cast<float*>(_dryBuffer->contents()), input, sizeBs);
+    
+    //compute
+    @autoreleasepool {
+        sendComputeCommandCommand();
+   }
+    //copy results to host
+    memcpy(convResBuffer,static_cast<float*>( _resultBuffer->contents()), sizeConvResSize);
+    
+    
+    
+    for (int i = 0; i < bs; i++) {
+        output[i] = (convResBuffer[i] + overLapBuffer[i]) * 0.15f;
+        overLapBuffer[i] = convResBuffer[bs + i];
+    }
+    
+    
+    
+    //reset result buffer
+    memset(static_cast<float*>(_resultBuffer->contents()), 0, sizeConvResSize);
+    
+    
+}
+
+
+void ConvEngine::initDevice() {
+    // Get the device (GPU)
+    _pDevice = MTL::CreateSystemDefaultDevice();
+}
+
+
+void ConvEngine::allocateOnDevice() {
+    
+   
+    _dryBuffer = _pDevice->newBuffer(sizeBs, MTL::ResourceStorageModeShared);
+    _timeDomainBuffer = _pDevice->newBuffer(sizePaddedSize, MTL::ResourceStorageModeShared);
+    
+    _impulseResponse = _pDevice->newBuffer(sizePaddedSize, MTL::ResourceStorageModeShared);
+   
+    _resultBuffer = _pDevice->newBuffer(sizeConvResSize, MTL::ResourceStorageModeShared);
+    
+    // Initialize other buffers
+    memset(_dryBuffer->contents(), 0, sizeBs);
+    memset(_timeDomainBuffer->contents(), 0, sizePaddedSize);
+    memset(_impulseResponse->contents(), 0, sizePaddedSize);
+    memset(_resultBuffer->contents(), 0, sizeConvResSize);
+    
+}
+
+void ConvEngine::createDefaultLibrary() {
+    // Load the default library from the bundle
+    NS::Error* pError = nullptr; // To capture any errors
+    NS::String* filePath = NS::String::string(metalLibPath, NS::ASCIIStringEncoding);
+    _library = _pDevice->newLibrary(filePath, &pError);
+    if (!_library) {
+        std::cerr << "Failed to load Metal library" ;
+    }
+}
+
+
+void ConvEngine::createCommandQueue() {
+    
+    _mCommandQueue  = _pDevice->newCommandQueue();
+    
+}
+
+
+void ConvEngine::createComputePipeLine() {
+    
+    /*
+    NS::Array *names = _library->functionNames();
+    
+    for (NSUInteger i = 0; i < names->count(); ++i) {
+        NS::String* nameObj = static_cast<NS::String*>(names->object(i));
+        std::string func_name = nameObj->utf8String();
+        std::cout << func_name << std::endl;
+    }
+    */
+   
+    MTL::Function *shift_and_insert = _library->newFunction(NS::String::string("shiftAndInsertKernel",NS::ASCIIStringEncoding));
+    
+    assert(shift_and_insert);
+    
+    MTL::Function* convolution = _library->newFunction(NS::String::string("shared_partitioned_convolution", NS::ASCIIStringEncoding));
+    
+    assert(convolution);
+    
+    
+    NS::Error* shift_error;
+    
+   
+    _shiftAndInsertPipeline = _pDevice->newComputePipelineState(shift_and_insert,&shift_error);
+    
+    assert(_shiftAndInsertPipeline);
+    
+    NS::Error* convolution_error;
+    _convolutionPipeline = _pDevice->newComputePipelineState(convolution,&convolution_error);
+    
+    assert(_convolutionPipeline);
+    
+    
+    shift_and_insert->release();
+    convolution->release();
+}
+
+
+void ConvEngine::sendComputeCommandCommand() {
+    
+    
     _CommandBuffer = _mCommandQueue->commandBuffer();
+    MTL::Size numThreadgroups = MTL::Size::Make(partitions,1,1);
+    MTL::Size threadGroupSize = MTL::Size::Make(bs,1,1);
     // First compute operation: Shift and Insert
     {
         // Create and configure the first encoder
@@ -148,7 +292,8 @@ void ConvEngine::render(float* input, float* output)
         // End encoding for this encoder
         encoder->endEncoding();
     }
-   
+  
+   // _CommandBuffer2 = _mCommandQueue->commandBuffer();
     
 
     // Second compute operation: Convolution
@@ -159,9 +304,9 @@ void ConvEngine::render(float* input, float* output)
         encoder2->setBuffer(_timeDomainBuffer, 0, 1);     // Dry response buffer
         encoder2->setBuffer(_impulseResponse, 0, 2);      // Impulse Response buffer
         encoder2->setBuffer(_sizes, 0, 3);                 // Sizes buffer
-        
-        uint totalSharedMemorySize = bs * 4 * sizeof(float);  // For arr1 and arr2
-        encoder2->setThreadgroupMemoryLength(totalSharedMemorySize, 0);
+      //  encoder2->setBuffer(_timeDomainBuffer2, 0, 4);
+        //uint totalSharedMemorySize = bs * 4 * sizeof(float);  // For arr1 and arr2
+       //encoder2->setThreadgroupMemoryLength(totalSharedMemorySize, 0);
         
         
         encoder2->dispatchThreads(numThreadgroups, threadGroupSize);
@@ -169,32 +314,8 @@ void ConvEngine::render(float* input, float* output)
         // End encoding for this encoder
         encoder2->endEncoding();
     }
-
-    
-    
-    
     _CommandBuffer->commit();
     _CommandBuffer->waitUntilCompleted();
     
-    // Copy results to CPU memory buffer
-    memcpy(convResBuffer, _resultBuffer->contents(), sizeConvResSize);
-
-    // Create a new command buffer to clear the result buffer
-    auto blitCommandBuffer = _mCommandQueue->commandBuffer();
-    auto blitEncoder = blitCommandBuffer->blitCommandEncoder();
-    blitEncoder->fillBuffer(_resultBuffer, NS::Range::Make(0, sizeConvResSize), 0);
-    blitEncoder->endEncoding();
-    blitCommandBuffer->commit();
-    blitCommandBuffer->waitUntilCompleted();
-   
-    
-    // Process results
-    for (int i = 0; i < bs; i++) {
-        output[i] = (convResBuffer[i] + overLapBuffer[i]);
-        overLapBuffer[i] = convResBuffer[bs + i - 1];
-    }
-    // Clear result buffer
-    
-        
     
 }

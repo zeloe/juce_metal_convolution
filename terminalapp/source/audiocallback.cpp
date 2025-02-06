@@ -25,7 +25,7 @@ MyAudioCallback::MyAudioCallback(ConvEngine* _engine, int maxBufferSize, float* 
     this->dryPtr = dryPtr;
     this->drySize = drySize;
     processingInBackground.store(false, std::memory_order_release);
-    startThread(Priority::highest);
+    startThread(Priority::low);
 }
 
 
@@ -50,7 +50,7 @@ void MyAudioCallback::audioDeviceIOCallbackWithContext(const float* const* input
 
 
         for (int i = 0; i < numSamples; i++) {
-            tempDry.setSample(0, i, dryPtr[counter]);
+            dry[i] =  dryPtr[counter];
             counter++;
             if (counter >= drySize) {
                 counter = 0;
@@ -87,10 +87,10 @@ void MyAudioCallback::prepare(juce::AudioBuffer<float>& dry, juce::AudioBuffer<f
  
 void MyAudioCallback::run() {
     while(!threadShouldExit()) {
-        if (processingInBackground.load(std::memory_order_acquire)) {
+        if(processingInBackground.load(std::memory_order_acquire)) {
             metal_engine->render(tempDry.getWritePointer(0),resBuffer.getWritePointer(0));
             processingInBackground.store(false, std::memory_order_release);
-        }
+          }
     }
     
     
