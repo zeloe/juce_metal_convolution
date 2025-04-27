@@ -50,7 +50,7 @@ set_target_properties(METAL PROPERTIES LINKER_LANGUAGE CXX)
 
 # Include Metal C++ headers
 target_include_directories(METAL PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/Metal.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/metal-cpp/Metal/Metal.hpp
     "${CMAKE_CURRENT_SOURCE_DIR}/metal-cpp"
 )
 
