@@ -1,12 +1,17 @@
-#ifndef _AUDIOCALLBACK_H_
 
+/*
+ This file contains a basic class for accessing audio drivers
+*/
+
+
+
+#ifndef _AUDIOCALLBACK_H_
 #define _AUDIOCALLBACK_H_
 #include "../../metal-cmake/convengine.h"
 #include <JuceHeader.h>
-class MyAudioCallback : public juce::AudioIODeviceCallback , public juce::Thread
+class MyAudioCallback : public juce::AudioIODeviceCallback, public juce::Thread
     {
     public:
-        MyAudioCallback(float* impulseResponseBufferData, int maxBufferSize, int impulseResponseSize, float* dryPtr, int drySize);
         MyAudioCallback(ConvEngine* _engine, int maxBufferSize, float* dryPtr, int drySize);
         ~MyAudioCallback() override;
         void audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
@@ -16,10 +21,7 @@ class MyAudioCallback : public juce::AudioIODeviceCallback , public juce::Thread
             int	numSamples,
             const AudioIODeviceCallbackContext& context) override;
          
-        void prepare(juce::AudioBuffer<float>& dry, juce::AudioBuffer<float>& imp, int bufferSize);
         bool hasFinished = false;
-        
-        void run() override;
         
         virtual void 	audioDeviceAboutToStart(AudioIODevice* device) override;
            
@@ -33,9 +35,9 @@ class MyAudioCallback : public juce::AudioIODeviceCallback , public juce::Thread
 
 
     private:
+        void run () override;
         juce::AudioBuffer<float> resBuffer;
         ConvEngine* metal_engine = nullptr;
-        std::atomic<bool> processingInBackground;
         int bs = -1;
         int drySize = -1;
         int counter = 0;
@@ -43,8 +45,7 @@ class MyAudioCallback : public juce::AudioIODeviceCallback , public juce::Thread
         float* dryPtr = nullptr;
         float* const* out = nullptr;
         float* in= nullptr;
-        bool isThreadRunning = false;
-        CriticalSection bufferMutex;
-    };
+        std::atomic<bool> isProcessing; 
+         };
 
 #endif //_AUDIOCALLBACK_H_

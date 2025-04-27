@@ -2,20 +2,10 @@
 
 #include "audiocallback.h"
 
-MyAudioCallback::MyAudioCallback(float* impulseResponseBufferData, int maxBufferSize, int impulseResponseSize, float* dryPtr, int drySize) :juce::Thread("GPUThread") {
-    resBuffer.setSize(1,maxBufferSize);
-    
-    resBuffer.clear();
-    tempDry.setSize(1, maxBufferSize);
-    tempDry.clear();
-    bs = maxBufferSize;
-    this->dryPtr = dryPtr;
-    this->drySize = drySize;
-     
 
-}
 
-MyAudioCallback::MyAudioCallback(ConvEngine* _engine, int maxBufferSize, float* dryPtr, int drySize):  juce::Thread("GPUThread") {
+MyAudioCallback::MyAudioCallback(ConvEngine* _engine, int maxBufferSize, float* dryPtr, int drySize) : juce::Thread("GpuThread")
+{
     metal_engine = _engine;
     tempDry.setSize(1, maxBufferSize);
     tempDry.clear();
@@ -24,17 +14,16 @@ MyAudioCallback::MyAudioCallback(ConvEngine* _engine, int maxBufferSize, float* 
     bs = maxBufferSize;
     this->dryPtr = dryPtr;
     this->drySize = drySize;
-    processingInBackground.store(false, std::memory_order_release);
-    startThread(Priority::low);
+    isProcessing.store(false);
+    startThread(Priority::highest);
 }
 
 
 
 MyAudioCallback::~MyAudioCallback()  
-    {
-        stopThread(2000);
+{
         
-    };
+};
  
 void MyAudioCallback::audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
         int	numInputChannels,
@@ -42,59 +31,43 @@ void MyAudioCallback::audioDeviceIOCallbackWithContext(const float* const* input
         int	numOutputChannels,
         int	numSamples,
         const AudioIODeviceCallbackContext& context)  
-    {
+{
         //copy Slice
         
-        auto dry = tempDry.getWritePointer(0);
+    auto dry = tempDry.getWritePointer(0);
 
 
 
-        for (int i = 0; i < numSamples; i++) {
-            dry[i] =  dryPtr[counter];
-            counter++;
-            if (counter >= drySize) {
-                counter = 0;
-            }
+    for (int i = 0; i < numSamples; i++) {
+        dry[i] =  dryPtr[counter];
+        counter++;
+        if (counter >= drySize) {
+            counter = 0;
         }
-    processingInBackground.store(true, std::memory_order_release);
-        //
-    while(processingInBackground.load(std::memory_order_acquire)) {};
+    }
+       
+    isProcessing.store(true);
+    while(isProcessing.load()) {};
+    
+    
+    float* ptr_L = outputChannelData[0];
+    float* ptr_R = outputChannelData[1];
     float* res = resBuffer.getWritePointer(0);
-        float* ptr_L = outputChannelData[0];
-        float* ptr_R = outputChannelData[1];
-        for (int i = 0; i < numSamples; i++) {
-            ptr_L[i] = res[i];
-            ptr_R[i] = res[i];
-
-        }
+    for (int i = 0; i < numSamples; i++) {
+        ptr_L[i] = res[i] * 0.25f;
+        ptr_R[i] = res[i] * 0.25f;
+    }
         
 
-    } 
-void MyAudioCallback::prepare(juce::AudioBuffer<float>& dry, juce::AudioBuffer<float>& imp, int bufferSize)
-    {
+}
 
-       
-
-
-
-
-
-
-
-
-
-    }
- 
 void MyAudioCallback::run() {
-    while(!threadShouldExit()) {
-        if(processingInBackground.load(std::memory_order_acquire)) {
+    while (!threadShouldExit()) {
+        if(isProcessing.load()) {
             metal_engine->render(tempDry.getWritePointer(0),resBuffer.getWritePointer(0));
-            processingInBackground.store(false, std::memory_order_release);
-          }
+            isProcessing.store(false);
+        }
     }
-    
-    
-    
 }
 
 
