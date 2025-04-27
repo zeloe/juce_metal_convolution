@@ -8,7 +8,7 @@ You need cmake and commandline tools for Xcode to build.
   git clone https://github.com/zeloe/juce_metal_convolution.git
 ```
 You need to download [metal-cpp](https://developer.apple.com/metal/cpp/) form apple. \
-Extract and move metal-cpp folder inside metal-cmake. \
+Extract and move metal-cpp folder inside metal-cmake. 
 ```shell
   juce_metal_convolution/metal-cmake/  <- copy metal-cpp here
 ```
