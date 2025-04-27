@@ -5,19 +5,15 @@ kernel void shiftAndInsertKernel(
     device float* delayBuffer [[buffer(0)]],
     device const float* inputBuffer [[buffer(1)]],
     constant uint* SIZES [[buffer(2)]],
-    uint threadgroup_position_in_grid   [[ threadgroup_position_in_grid ]],
-    uint thread_position_in_threadgroup [[ thread_position_in_threadgroup ]],
-    uint threads_per_threadgroup        [[ threads_per_threadgroup ]])
+                                 uint gid [[thread_position_in_grid]], uint threadid [[thread_position_in_threadgroup]], uint blockDim [[threads_per_threadgroup]], uint blockid[[threadgroup_position_in_grid]])
 {
-    
-    uint thread_position_in_grid =
-            (threadgroup_position_in_grid * threads_per_threadgroup) +
-            thread_position_in_threadgroup;
+    uint thread_idx  = blockid*blockDim+threadid;
+   
     // Insert new elements at the beginning of the delay buffer
-    if (thread_position_in_grid < SIZES[0]) {
-        delayBuffer[thread_position_in_grid] = inputBuffer[thread_position_in_grid];
+    if (thread_idx < SIZES[0]) {
+        delayBuffer[thread_idx] = inputBuffer[thread_idx];
     }
     
             // Shift the old values
-            delayBuffer[thread_position_in_grid + SIZES[0]] = delayBuffer[thread_position_in_grid];
+            delayBuffer[thread_idx + SIZES[0]] = delayBuffer[thread_idx];
 }
