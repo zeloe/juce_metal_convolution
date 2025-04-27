@@ -14,6 +14,6 @@ kernel void shiftAndInsertKernel(
         delayBuffer[thread_idx] = inputBuffer[thread_idx];
     }
     
-            // Shift the old values
-            delayBuffer[thread_idx + SIZES[0]] = delayBuffer[thread_idx];
+    // Shift the old values
+    delayBuffer[thread_idx + SIZES[0]] = delayBuffer[thread_idx];
 }
