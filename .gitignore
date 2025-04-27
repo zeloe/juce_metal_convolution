@@ -1,4 +1,4 @@
 **/.DS_Store
 **/build
 **/Libs
-**/metal-cpp
+**/metal-cmake/metal-cpp
