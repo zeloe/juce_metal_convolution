@@ -1,35 +1,66 @@
-# juce_cuda_convolution
- Linear Convolution using CUDA 
- ```shell
-  git clone https://github.com/zeloe/juce_cuda_convolution.git
-  cmake . -B build -G "Visual Studio 17 2022"
+# juce_metal_convolution
+
+Real-time convolution reverb without FFT, accelerated using Metal on the GPU.  \
+Convolution processing runs on a dedicated background thread, producing a high-quality, natural reverb effect. \
+Tested on a MacBook Air M4.
+
+---
+
+## Features
+
+- Real-time, time-domain convolution (no FFT)
+- GPU-accelerated with Metal
+- Background-threaded processing
+- CMake-based build system (easy setup)
+
+---
+
+## How to Build
+
+You need:
+
+- CMake installed
+- Xcode with command-line tools installed
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/zeloe/juce_metal_convolution.git
 ```
-# How it works
-It performs time domain convolution on two different files on a realtime thread.  
 
-## Time Domain Buffer
-This holds all values for convolution in size of the padded impulseresponse. \
-Padded impulse response is a multiple of buffersize and number of paralell convolutions. 
-Insert and shift kernel copies new buffer at beggining. \
-All other content gets shifted by buffersize. \
-Content at end of Time Domain Buffer gets discarded. 
+### 2. Download `metal-cpp`
 
-## Cuda
-It uses four kernels with different streams. \
-Inside header file you can specify number of paralell streams. (you will need to edit and add functions for that) \
-Each of these kernels computes convolution results and sums them inside same buffer.  \
-I used constant memory for offsets in time and impulse response buffer. \
-Shared memory for each sub convolution. 
-## Hardware 
-GeForce GTX 1660 Ti
+Download [metal-cpp](https://developer.apple.com/metal/cpp/) from Apple.  
+Extract it, and copy the `metal-cpp` folder inside the `metal-cmake` directory:
 
+```text
+juce_metal_convolution/metal-cmake/  ← copy metal-cpp here
+```
 
+> Note: You must have the `metal-cpp` headers locally; they are not included in this repo.
 
+### 3. Build using CMake
 
-# Note: 
-It still needs optimisation. \
-I tried it also as VST and got it running in mono. I have really old hardware :). \
-As a template repo i used this [template](https://github.com/anthonyalfimov/JUCE-CMake-Plugin-Template/blob/main/CMakeLists.txt).
-\
-Cuda == 12.3.52 \
-MSVC == 19.36.32537.0
+To generate an Xcode project:
+
+```bash
+cmake -B build -G Xcode
+```
+
+Or to build directly using Make:
+
+```bash
+cmake -B build
+cd build
+make
+```
+
+---
+
+## Notes
+
+- This project uses [JUCE](https://juce.com/) for audio setup and Metal interop.
+- Metal is used directly via [metal-cpp](https://developer.apple.com/metal/cpp/), Apple's official C++ bindings for Metal.
+- Currently tested only on Apple Silicon (MacBook Air M4).
+
+---
