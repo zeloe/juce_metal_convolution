@@ -14,10 +14,9 @@ public:
     ConvEngine(int maxBufferSize);
     ~ConvEngine();
     
-    void render(float* input, float* output);
+    void render(const float* input, float* output);
     void init();
     
-    float* result = nullptr;
 private:
     void initDevice();
     
@@ -28,46 +27,43 @@ private:
     void createComputePipeLine();
     void encodeComputeCommand(MTL::ComputeCommandEncoder* computeEncoder);
     void sendComputeCommandCommand();
+    void clear();
+    void freeMemory();
+    
+    MTL::Device* _pDevice;
+    
     MTL::Buffer* _impulseResponse ;
-    MTL::Buffer* _timeDomainBuffer2 ;
     MTL::Buffer* _sizes ;
     MTL::Buffer* _dryBuffer ;
     MTL::Buffer* _timeDomainBuffer;
     MTL::Buffer* _resultBuffer;
-    MTL::Device* _pDevice;
+    
     MTL::CommandBuffer* _CommandBuffer;
-    MTL::CommandBuffer* _CommandBuffer2;
     MTL::CommandQueue* _mCommandQueue;
     
-    MTL::CounterSampleBuffer* test;
     MTL::Library* metalDefaultLibrary;
     MTL::Library* _library;
-    MTL::Function* _convolution;
-    MTL::Function* _shift_and_insert;
+
     MTL::ComputePipelineState* _pipeLine;
     
-    //
-    MTL::ComputeCommandEncoder* encoder1;
-    MTL::ComputeCommandEncoder* encoder2;
     //
     MTL::ComputePipelineState* _convolutionPipeline;
     MTL::ComputePipelineState* _shiftAndInsertPipeline;
     //
     int offset = 0;
-    
     int bs = 0;
-    int sizeBs = 0;
+    int bsFloat = 0;
     int convResSize = 0;
-    int sizeConvResSize = 0;
+    int convResSizeFloat = 0;
     int paddedSize = 0;
-    int sizePaddedSize = 0;
+    int paddedSizeFloat = 0;
     int partitions = 0;
     float* convResBuffer = nullptr;
     float* overLapBuffer = nullptr;
-    
+    uint totalSharedMemorySize = 0;
     //
     MTL::Size gridSize;
-    MTL::Size threadGroupSize;
+    MTL::Size numberOfThreads;
 };
 
 
