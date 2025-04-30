@@ -62,5 +62,5 @@ make
 - This project uses [JUCE](https://juce.com/) for audio setup and Metal interop.
 - Metal is used directly via [metal-cpp](https://developer.apple.com/metal/cpp/), Apple's official C++ bindings for Metal.
 - Currently tested only on Apple Silicon (MacBook Air M4).
-
+- Check out [here](https://github.com/zeloe/RTConvolver) VST3 Plugin to use in DAW. 
 ---
